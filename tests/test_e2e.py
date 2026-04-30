@@ -419,6 +419,9 @@ class TestFullE2E:
         _step("18b", "config rename", "rename config via API")
         self._test_config_rename(config_id)
 
+        _step("18c", "config set-default-bucket", "set/clear storage.output.default_bucket")
+        self._test_config_set_default_bucket(config_id)
+
         _step(19, "config new scaffold", "generate boilerplate for component")
         self._test_config_new_scaffold()
 
@@ -1279,6 +1282,96 @@ class TestFullE2E:
             "--name",
             "E2E Test Config",
         )
+
+    def _test_config_set_default_bucket(self, config_id: str) -> None:
+        """Test config set-default-bucket: set, dry-run, clear, no-op."""
+        target_bucket = f"in.c-{RUN_ID.lower()}-default-bucket"
+
+        # --dry-run preview first (no write)
+        data = self._run_ok(
+            "config",
+            "set-default-bucket",
+            "--project",
+            self.alias,
+            "--component-id",
+            TEST_COMPONENT_ID,
+            "--config-id",
+            config_id,
+            "--bucket",
+            target_bucket,
+            "--dry-run",
+        )
+        assert data["data"]["dry_run"] is True
+        assert any("default_bucket" in c for c in data["data"]["changes"])
+
+        # Apply the set
+        data = self._run_ok(
+            "config",
+            "set-default-bucket",
+            "--project",
+            self.alias,
+            "--component-id",
+            TEST_COMPONENT_ID,
+            "--config-id",
+            config_id,
+            "--bucket",
+            target_bucket,
+        )
+        assert data["data"]["default_bucket"] == target_bucket
+
+        # Verify via detail
+        data = self._run_ok(
+            "config",
+            "detail",
+            "--project",
+            self.alias,
+            "--component-id",
+            TEST_COMPONENT_ID,
+            "--config-id",
+            config_id,
+        )
+        cfg = data["data"]["configuration"]
+        assert cfg["storage"]["output"]["default_bucket"] == target_bucket
+
+        # Setting the same value is a no-op (changed=false, no API write needed)
+        data = self._run_ok(
+            "config",
+            "set-default-bucket",
+            "--project",
+            self.alias,
+            "--component-id",
+            TEST_COMPONENT_ID,
+            "--config-id",
+            config_id,
+            "--bucket",
+            target_bucket,
+        )
+        assert data["data"]["changed"] is False
+
+        # Clear and verify the key is gone
+        self._run_ok(
+            "config",
+            "set-default-bucket",
+            "--project",
+            self.alias,
+            "--component-id",
+            TEST_COMPONENT_ID,
+            "--config-id",
+            config_id,
+            "--clear",
+        )
+        data = self._run_ok(
+            "config",
+            "detail",
+            "--project",
+            self.alias,
+            "--component-id",
+            TEST_COMPONENT_ID,
+            "--config-id",
+            config_id,
+        )
+        cfg = data["data"]["configuration"]
+        assert "default_bucket" not in cfg.get("storage", {}).get("output", {})
 
     def _test_config_new_scaffold(self) -> None:
         """Test config new -- generate scaffold for a component."""

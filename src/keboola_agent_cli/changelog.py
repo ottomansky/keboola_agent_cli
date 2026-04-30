@@ -8,6 +8,9 @@ from __future__ import annotations
 
 # Ordered newest-first.  Each value is a list of brief one-line descriptions.
 CHANGELOG: dict[str, list[str]] = {
+    "0.22.0": [
+        "New: `kbagent config set-default-bucket` -- set or clear `configuration.storage.output.default_bucket` on a configuration without raw-mode JSON edits. Discoverable wrapper around the workaround documented at https://keboola.atlassian.net/wiki/spaces/SUP/pages/3770155030/ (epic KBCP-108). Read-modify-write preserves sibling keys; `--dry-run` previews; same-value writes short-circuit with `{'changed': false}`.",
+    ],
     "0.21.1": [
         "Fix: sync pull on a newly created dev branch now writes config rows (#193) -- idempotent skip guard for rows was missing a file-existence check, causing rows to be silently skipped when the branch directory was new (hash matched main because the branch is a clone)",
     ],

@@ -1,5 +1,22 @@
 # Gotchas -- Response Parsing and Common Pitfalls
 
+## `default_bucket` is per-config and only an output prefix (since 0.22.0)
+
+- `kbagent config set-default-bucket` writes
+  `configuration.storage.output.default_bucket`. The Storage API uses this
+  value as the bucket for any output table whose `destination` is unset.
+  Tables that pin `destination: in.c-...` ignore it.
+- The setting lives on the configuration, not the project; configs that
+  share a destination bucket each need their own value.
+- "Clear" leaves an empty `storage.output: {}` if no other keys live there
+  -- intentional, mirrors how `set` creates intermediate parents. Storage
+  API treats both `output: {}` and a missing `output` as "use the default
+  derived bucket name".
+- This is the same setting the support article describes as "raw mode":
+  https://keboola.atlassian.net/wiki/spaces/SUP/pages/3770155030/.
+- UI exposure is tracked under epic
+  [KBCP-108](https://keboola.atlassian.net/browse/KBCP-108).
+
 ## Variables: attach, don't manage (since 0.21.0)
 
 - `keboola.variables` is an implementation detail. Use
