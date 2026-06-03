@@ -297,6 +297,10 @@ When working inside a git repository or project directory, run `kbagent init` (o
 | Remove a constraint | `kbagent semantic-layer remove constraint --project PROJECT --name NAME` |
 | Remove a relationship. | `kbagent semantic-layer remove relationship --project PROJECT --name NAME` |
 | Remove a glossary term. | `kbagent semantic-layer remove glossary --project PROJECT --term TERM` |
+| List reference-data records (dimension summaries; use ``get`` for members) | `kbagent semantic-layer reference-data list --project PROJECT` |
+| Fetch one record (all members) by ``--id`` or by ``--model`` + ``--dimension`` | `kbagent semantic-layer reference-data get --project PROJECT` |
+| Create or replace (by model + dimension) a reference-data record | `kbagent semantic-layer reference-data set --project PROJECT --dimension DIMENSION --members-file MEMBERS-FILE` |
+| Delete a reference-data record by UUID (server-side soft-delete) | `kbagent semantic-layer reference-data delete --project PROJECT --id ID-` |
 | Encrypt the project's storage token for transformation `user_properties` | `kbagent sl token --project PROJECT --component-id COMPONENT-ID` |
 | Build a semantic-layer model from a list of storage tables (non-interactive) | `kbagent sl build --project PROJECT` |
 | Promote a model from one project to another (NEW + overwrite CHANGED; never deletes) | `kbagent sl promote --from-project FROM-PROJECT --to-project TO-PROJECT` |
@@ -325,6 +329,10 @@ When working inside a git repository or project directory, run `kbagent init` (o
 | Remove a constraint | `kbagent sl remove constraint --project PROJECT --name NAME` |
 | Remove a relationship. | `kbagent sl remove relationship --project PROJECT --name NAME` |
 | Remove a glossary term. | `kbagent sl remove glossary --project PROJECT --term TERM` |
+| List reference-data records (dimension summaries; use ``get`` for members) | `kbagent sl reference-data list --project PROJECT` |
+| Fetch one record (all members) by ``--id`` or by ``--model`` + ``--dimension`` | `kbagent sl reference-data get --project PROJECT` |
+| Create or replace (by model + dimension) a reference-data record | `kbagent sl reference-data set --project PROJECT --dimension DIMENSION --members-file MEMBERS-FILE` |
+| Delete a reference-data record by UUID (server-side soft-delete) | `kbagent sl reference-data delete --project PROJECT --id ID-` |
 | GET an endpoint on the running kbagent serve | `kbagent http get <PATH>` |
 | POST to an endpoint on the running kbagent serve | `kbagent http post <PATH>` |
 | PATCH an endpoint on the running kbagent serve | `kbagent http patch <PATH>` |

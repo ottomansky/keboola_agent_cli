@@ -247,7 +247,7 @@ class TestDeleteItem:
 
 
 class TestSemanticTypes:
-    """Sanity-check the SEMANTIC_TYPES tuple has the six expected slugs."""
+    """Sanity-check the SEMANTIC_TYPES tuple has the expected slugs."""
 
     def test_semantic_types_complete(self) -> None:
         assert set(SEMANTIC_TYPES) == {
@@ -257,4 +257,5 @@ class TestSemanticTypes:
             "semantic-relationship",
             "semantic-constraint",
             "semantic-glossary",
+            "semantic-reference-data",
         }

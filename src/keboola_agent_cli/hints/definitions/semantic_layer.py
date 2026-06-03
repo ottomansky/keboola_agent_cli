@@ -810,3 +810,141 @@ HintRegistry.register(
         ],
     )
 )
+
+
+# ── semantic-layer reference-data list ─────────────────────────────
+
+HintRegistry.register(
+    CommandHint(
+        cli_command="semantic-layer.reference-data.list",
+        description="List reference-data (dimension-member) records",
+        steps=[
+            HintStep(
+                comment="List every `semantic-reference-data` record (optionally one model)",
+                client=ClientCall(
+                    method="list_items",
+                    args={
+                        "item_type": '"semantic-reference-data"',
+                        "model_uuid": "{model}",
+                    },
+                    client_type="metastore",
+                    result_var="records",
+                    result_hint="list[dict]",
+                ),
+                service=_make_service("list_reference_data", model_name_or_uuid="{model}"),
+            ),
+        ],
+        notes=[
+            "`model_uuid=None` lists every dimension in the project.",
+            "Summary only (dimension + member_count); use `get` for the members.",
+        ],
+    )
+)
+
+
+# ── semantic-layer reference-data get ──────────────────────────────
+
+HintRegistry.register(
+    CommandHint(
+        cli_command="semantic-layer.reference-data.get",
+        description="Fetch one reference-data record (all members)",
+        steps=[
+            HintStep(
+                comment="GET by UUID (or list+filter by model+dimensionName)",
+                client=ClientCall(
+                    method="get_item",
+                    args={
+                        "item_type": '"semantic-reference-data"',
+                        "item_id": "{id}",
+                    },
+                    client_type="metastore",
+                    result_var="record",
+                    result_hint="dict",
+                ),
+                service=_make_service(
+                    "get_reference_data",
+                    record_id="{id}",
+                    model_name_or_uuid="{model}",
+                    dimension="{dimension}",
+                ),
+            ),
+        ],
+        notes=[
+            "Provide `record_id`, or both `model_name_or_uuid` + `dimension`.",
+        ],
+    )
+)
+
+
+# ── semantic-layer reference-data set ──────────────────────────────
+
+HintRegistry.register(
+    CommandHint(
+        cli_command="semantic-layer.reference-data.set",
+        description="Create or replace a reference-data record (by model + dimension)",
+        steps=[
+            HintStep(
+                comment=(
+                    "Resolve modelUUID, then POST (create) or PUT (replace, "
+                    "revision++) the whole members[] array."
+                ),
+                client=ClientCall(
+                    method="post_item",
+                    args={
+                        "item_type": '"semantic-reference-data"',
+                        "name": "{dimension}",
+                        "data": (
+                            '{"modelUUID": model_uuid, "dimensionName": {dimension}, '
+                            '"members": members}'
+                        ),
+                    },
+                    client_type="metastore",
+                    result_var="record",
+                    result_hint="dict",
+                ),
+                service=_make_service(
+                    "set_reference_data",
+                    model_name_or_uuid="{model}",
+                    dimension="{dimension}",
+                    members="<list[dict] parsed from --members-file>",
+                    dataset_id="{dataset_id}",
+                    description="{description}",
+                ),
+            ),
+        ],
+        notes=[
+            "Idempotent on (modelUUID, dimensionName): existing record -> PUT, "
+            "else POST. `members` is a JSON array of member objects.",
+            "For a Chart of Accounts the member keys mirror DIM_COA columns "
+            "(account_code, account_name, parent_code, ...).",
+        ],
+    )
+)
+
+
+# ── semantic-layer reference-data delete ───────────────────────────
+
+HintRegistry.register(
+    CommandHint(
+        cli_command="semantic-layer.reference-data.delete",
+        description="Delete a reference-data record by UUID",
+        steps=[
+            HintStep(
+                comment="DELETE /semantic-reference-data/{id} (server-side soft-delete)",
+                client=ClientCall(
+                    method="delete_item",
+                    args={
+                        "item_type": '"semantic-reference-data"',
+                        "item_id": "{id}",
+                    },
+                    client_type="metastore",
+                    result_var="result",
+                ),
+                service=_make_service("delete_reference_data", record_id="{id}"),
+            ),
+        ],
+        notes=[
+            "Soft-delete: the record stays in revision history server-side.",
+        ],
+    )
+)

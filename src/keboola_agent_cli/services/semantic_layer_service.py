@@ -830,6 +830,189 @@ class SemanticLayerService(BaseService):
             return client.post_item("semantic-glossary", name=term, data=data)
 
     # ------------------------------------------------------------------
+    # Reference data — dimension-member records (e.g. a Chart of Accounts)
+    # ------------------------------------------------------------------
+    #
+    # ``semantic-reference-data`` stores the full member list of one
+    # dimension (one record per dimension, members in a ``members[]``
+    # array). Unlike the five model-children, it is NOT AI-generated and is
+    # deliberately kept out of ``build`` / ``export`` / ``diff`` / cascade —
+    # it has its own self-contained CRUD surface here.
+
+    _REFERENCE_DATA_TYPE: ClassVar[SemanticType] = "semantic-reference-data"
+
+    @staticmethod
+    def _unpack_reference_record(
+        alias: str,
+        item: dict[str, Any],
+        *,
+        include_members: bool,
+    ) -> dict[str, Any]:
+        """Project a raw metastore item into the CLI reference-data shape."""
+        attrs = item.get("attributes") or {}
+        members = attrs.get("members") or []
+        out: dict[str, Any] = {
+            "project": alias,
+            "id": item.get("id", ""),
+            "dimension_name": attrs.get("dimensionName", ""),
+            "model_uuid": attrs.get("modelUUID", ""),
+            "dataset_id": attrs.get("datasetId"),
+            "description": attrs.get("description"),
+            "member_count": len(members),
+            "revision": (item.get("meta") or {}).get("revision"),
+        }
+        if include_members:
+            out["members"] = members
+        return out
+
+    @staticmethod
+    def _find_reference_data_for_model(
+        client: MetastoreClient,
+        model_uuid: str,
+        dimension: str,
+    ) -> dict[str, Any] | None:
+        """Return the existing record for ``(model_uuid, dimension)`` or None."""
+        for item in client.list_items("semantic-reference-data", model_uuid):
+            if (item.get("attributes") or {}).get("dimensionName") == dimension:
+                return item
+        return None
+
+    def list_reference_data(
+        self,
+        alias: str,
+        model_name_or_uuid: str | None = None,
+    ) -> dict[str, Any]:
+        """List reference-data records (optionally scoped to one model).
+
+        Returns ``{project, reference_data: [{id, dimension_name,
+        model_uuid, dataset_id, member_count}]}``. Member lists are omitted
+        from the summary — use ``get`` for the full members.
+        """
+        project = self._resolve_one_project(alias)
+        client = self._new_metastore_client(project)
+        try:
+            model_uuid: str | None = None
+            if model_name_or_uuid is not None:
+                model_uuid, _ = self._resolve_model(client, model_name_or_uuid)
+            raw = client.list_items(self._REFERENCE_DATA_TYPE, model_uuid)
+        finally:
+            client.close()
+        records = [self._unpack_reference_record(alias, i, include_members=False) for i in raw]
+        for r in records:
+            r.pop("project", None)
+        return {"project": alias, "reference_data": records}
+
+    def get_reference_data(
+        self,
+        alias: str,
+        *,
+        record_id: str | None = None,
+        model_name_or_uuid: str | None = None,
+        dimension: str | None = None,
+    ) -> dict[str, Any]:
+        """Fetch one record by ``record_id``, or by ``dimension``.
+
+        When resolving by ``dimension``, ``model_name_or_uuid`` may be ``None``
+        — it resolves to the project's default model like every other
+        model-scoped operation here.
+        """
+        if record_id is None and dimension is None:
+            raise KeboolaApiError(
+                message="Provide --id, or --dimension (optionally with --model).",
+                error_code=ErrorCode.VALIDATION_ERROR,
+            )
+        project = self._resolve_one_project(alias)
+        client = self._new_metastore_client(project)
+        try:
+            if record_id is not None:
+                item = client.get_item(self._REFERENCE_DATA_TYPE, record_id)
+            else:
+                # The guard above guarantees dimension is set on this branch.
+                assert dimension is not None
+                model_uuid, _ = self._resolve_model(client, model_name_or_uuid)
+                item = self._find_reference_data_for_model(client, model_uuid, dimension)
+                if item is None:
+                    raise KeboolaApiError(
+                        message=(
+                            f"No reference-data record for dimension {dimension!r} "
+                            f"in model {model_name_or_uuid!r}."
+                        ),
+                        error_code=ErrorCode.NOT_FOUND,
+                    )
+        finally:
+            client.close()
+        return self._unpack_reference_record(alias, item, include_members=True)
+
+    def set_reference_data(
+        self,
+        alias: str,
+        model_name_or_uuid: str | None,
+        *,
+        dimension: str,
+        members: list[dict[str, Any]],
+        dataset_id: str | None = None,
+        description: str | None = None,
+    ) -> dict[str, Any]:
+        """Create or replace (by model + dimension) a reference-data record.
+
+        Idempotent on ``(modelUUID, dimensionName)``: if a record already
+        exists it is replaced in place via ``PUT`` (revision increments,
+        history preserved); otherwise a new record is ``POST``-ed. The
+        envelope ``name`` is the dimension (unique per project per type).
+        """
+        if not isinstance(members, list):
+            raise KeboolaApiError(
+                message="members must be a JSON array of member objects.",
+                error_code=ErrorCode.VALIDATION_ERROR,
+            )
+        project = self._resolve_one_project(alias)
+        client = self._new_metastore_client(project)
+        try:
+            model_uuid, _ = self._resolve_model(client, model_name_or_uuid)
+            data: dict[str, Any] = {
+                "modelUUID": model_uuid,
+                "dimensionName": dimension,
+                "members": members,
+            }
+            if dataset_id:
+                data["datasetId"] = dataset_id
+            if description:
+                data["description"] = description
+
+            existing = self._find_reference_data_for_model(client, model_uuid, dimension)
+            if existing is not None:
+                item = client.put_item(
+                    self._REFERENCE_DATA_TYPE,
+                    existing.get("id", ""),
+                    name=dimension,
+                    data=data,
+                )
+                action = "updated"
+            else:
+                item = client.post_item(self._REFERENCE_DATA_TYPE, name=dimension, data=data)
+                action = "created"
+        finally:
+            client.close()
+        result = self._unpack_reference_record(alias, item, include_members=False)
+        result["action"] = action
+        return result
+
+    def delete_reference_data(self, alias: str, record_id: str) -> dict[str, Any]:
+        """Delete a reference-data record by UUID (soft-delete server-side)."""
+        project = self._resolve_one_project(alias)
+        client = self._new_metastore_client(project)
+        try:
+            item = client.get_item(self._REFERENCE_DATA_TYPE, record_id)
+            attrs = item.get("attributes") or {}
+            client.delete_item(self._REFERENCE_DATA_TYPE, record_id)
+        finally:
+            client.close()
+        return {
+            "project": alias,
+            "removed": {"id": record_id, "dimension_name": attrs.get("dimensionName", "")},
+        }
+
+    # ------------------------------------------------------------------
     # Phase 4 — edit (DELETE-then-POST with rollback + rename cascade)
     # ------------------------------------------------------------------
 
